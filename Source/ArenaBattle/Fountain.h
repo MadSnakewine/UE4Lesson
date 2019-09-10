@@ -34,4 +34,8 @@ public:
 
 	UPROPERTY(VisibleAnywhere)
 	UStaticMeshComponent *Splash;
+
+	UPROPERTY(EditAnywhere, Category=ID)
+	int32 ID;
+
 };
