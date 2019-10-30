@@ -2,6 +2,7 @@
 
 
 #include "ABCharacter.h"
+#include "ABAnimInstance.h"
 
 // Sets default values
 AABCharacter::AABCharacter()
@@ -39,6 +40,13 @@ AABCharacter::AABCharacter()
 	ArmLengthSpeed = 3.0f;
 	ArmRotationSpeed = 10.0f;
 	GetCharacterMovement()->JumpZVelocity = 800.0f;
+
+	IsAttacking = false;
+
+	MaxCombo = 4;
+	AttackEndComboState();
+
+	GetCapsuleComponent()->SetCollisionProfileName(TEXT("ABCharacter"));
 }
 
 // Called when the game starts or when spawned
@@ -134,9 +142,71 @@ void AABCharacter::Turn(float NewAxisValue)
 	}
 }
 
+void AABCharacter::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+	/*auto AnimInstance = Cast<UABAnimInstance>(GetMesh()->GetAnimInstance());
+	ABCKECK(nullptr != AnimInstance);
+
+	AnimInstance->OnMontageEnded.AddDynamic(this, &AABCharacter::OnAttackMontageEnded);*/
+	ABAnim = Cast<UABAnimInstance>(GetMesh()->GetAnimInstance());
+	ABCKECK(nullptr != ABAnim);
+
+	ABAnim->OnMontageBlendingOut.AddDynamic(this, &AABCharacter::OnAttackMontageEnded);
+
+	ABAnim->OnNextAttackCheck.AddLambda([this]()->void {
+		ABLOG(Warning, TEXT("OnNextAttackCheck"));
+		CanNextCombo = false;
+
+		if (IsComboInputOn)
+		{
+			AttackStartComboState();
+			ABAnim->JumpToAttackMontageSection(CurrentCombo);
+		}
+	});
+}
+
 void AABCharacter::Attack()
 {
-	ABLOG_S(Warning);
+	if (IsAttacking)
+	{
+		ABCKECK(FMath::IsWithinInclusive<int32>(CurrentCombo, 1, MaxCombo));
+		if (CanNextCombo)
+		{
+			IsComboInputOn = true;
+		}
+	}
+	else
+	{
+		ABCKECK(CurrentCombo == 0);
+		AttackStartComboState();
+		ABAnim->PlayAttackMontage();
+		ABAnim->JumpToAttackMontageSection(CurrentCombo);
+		IsAttacking = true;
+	}
+}
+
+void AABCharacter::AttackStartComboState()
+{
+	CanNextCombo = true;
+	IsComboInputOn = false;
+	ABCKECK(FMath::IsWithinInclusive<int32>(CurrentCombo, 0, MaxCombo - 1));
+	CurrentCombo = FMath::Clamp<int32>(CurrentCombo + 1, 1, MaxCombo);
+}
+
+void AABCharacter::AttackEndComboState()
+{
+	IsComboInputOn = false;
+	CanNextCombo = false;
+	CurrentCombo = 0;
+}
+
+void AABCharacter::OnAttackMontageEnded(UAnimMontage* Montage, bool bInterrupted)
+{
+	ABCKECK(IsAttacking);
+	ABCKECK(CurrentCombo > 0);
+	IsAttacking = false;
+	AttackEndComboState();
 }
 
 void AABCharacter::ViewChange()
